@@ -97,6 +97,10 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def is_youtube_url(text: str) -> bool:
     return any(x in text for x in ["youtube.com/watch", "youtu.be/", "youtube.com/shorts"])
 
+
+def is_url(text: str) -> bool:
+    return text.startswith("http://") or text.startswith("https://")
+
 def process_youtube(url: str, tmp_dir: str):
     sub_opts = {
         "writeautomaticsub": True,
@@ -250,8 +254,8 @@ def convert_to_mp3(input_path: str, tmp_dir: str) -> str:
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
-    if not is_youtube_url(text):
-        await update.message.reply_text("Send me a YouTube link, an audio file, or a video file.")
+    if not is_url(text):
+        await update.message.reply_text("Send me a link (YouTube, Google Drive, or any direct audio/video URL), an audio file, or a video file.")
         return
     user_id = update.effective_user.id
     user = get_user(user_id)
@@ -261,7 +265,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
         )
         return
-    msg = await update.message.reply_text("â³ Processing YouTube link...")
+    msg = await update.message.reply_text("â³ Processing link...")
     try:
         with tempfile.TemporaryDirectory() as tmp_dir:
             await context.bot.edit_message_text(
@@ -351,11 +355,19 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_results(update, context, msg, transcript, summary)
     except Exception as e:
         logger.error(f"Error processing file: {e}")
-        await context.bot.edit_message_text(
-            f"\u274c Error: {str(e)[:200]}",
-            chat_id=update.effective_chat.id,
-            message_id=msg.message_id
-        )
+        err = str(e)
+        if "too big" in err.lower() or "file is too big" in err.lower() or "large" in err.lower() or "413" in err or "20" in err:
+            await context.bot.edit_message_text(
+                "\u26a0\ufe0f File too large \u2014 Telegram limits bot uploads to 20MB.\n\nInstead:\n1. Upload your file to Google Drive\n2. Set sharing to \u201cAnyone with the link\u201d\n3. Paste the link here",
+                chat_id=update.effective_chat.id,
+                message_id=msg.message_id
+            )
+        else:
+            await context.bot.edit_message_text(
+                f"\u274c Error: {err[:200]}",
+                chat_id=update.effective_chat.id,
+                message_id=msg.message_id
+            )
 
 async def transcribe_audio_file(file_path, tmp_dir, user, update, context, msg):
     converted = await asyncio.get_event_loop().run_in_executor(

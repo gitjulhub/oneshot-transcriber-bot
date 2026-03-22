@@ -44,19 +44,19 @@ def get_user(user_id: int) -> dict:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👋 *OneShot Transcriber*\n\n"
+        "ð *OneShot Transcriber*\n\n"
         "Send me:\n"
-        "• An audio file (MP3, M4A, WAV, OGG)\n"
-        "• A video file (MP4, MKV, MOV)\n"
-        "• A YouTube link\n\n"
+        "â¢ An audio file (MP3, M4A, WAV, OGG)\n"
+        "â¢ A video file (MP4, MKV, MOV)\n"
+        "â¢ A YouTube link\n\n"
         "I'll transcribe it and give you a full transcript + structured summary.\n\n"
         "*Setup:*\n"
         "1. Get a free Groq API key at console.groq.com\n"
         "2. Send: `/setkey YOUR_GROQ_KEY`\n\n"
         "*Commands:*\n"
-        "`/setkey KEY` — set your Groq API key\n"
-        "`/language` — toggle English / Taglish mode\n"
-        "`/status` — check your current settings",
+        "`/setkey KEY` â set your Groq API key\n"
+        "`/language` â toggle English / Taglish mode\n"
+        "`/status` â check your current settings",
         parse_mode="Markdown",
     )
 
@@ -72,21 +72,21 @@ async def set_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = get_user(user_id)
     user["groq_key"] = key
     save_user_data()
-    await update.message.reply_text("✅ Groq API key saved.")
+    await update.message.reply_text("â Groq API key saved.")
 
 async def toggle_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = get_user(user_id)
     user["taglish"] = not user.get("taglish", False)
     save_user_data()
-    mode = "🇵🇭 Filipino/Taglish" if user["taglish"] else "🇺🇸 English"
+    mode = "ðµð­ Filipino/Taglish" if user["taglish"] else "ðºð¸ English"
     await update.message.reply_text(f"Language mode set to: {mode}")
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = get_user(user_id)
-    has_key = "✅ Set" if user.get("groq_key") else "❌ Not set"
-    lang = "🇵🇭 Filipino/Taglish" if user.get("taglish") else "🇺🇸 English"
+    has_key = "â Set" if user.get("groq_key") else "â Not set"
+    lang = "ðµð­ Filipino/Taglish" if user.get("taglish") else "ðºð¸ English"
     await update.message.reply_text(
         f"*Your settings:*\n"
         f"Groq API Key: {has_key}\n"
@@ -222,7 +222,7 @@ def generate_summary(transcript: str, groq_key: str, taglish: bool) -> str:
     lang_note = "\nThe transcript may contain Filipino, Tagalog, English, or Taglish. Write summary in English." if taglish else ""
     system_prompt = f"""You are a precise transcript summarizer. Produce a structured numbered summary.{lang_note}
 
-FORMAT — follow exactly:
+FORMAT â follow exactly:
 1. Section Title
 1.1 Key point.
 1.2 Another point.
@@ -230,7 +230,7 @@ FORMAT — follow exactly:
 2. Next Section
 2.1 Key point.
 
-Start directly with "1." — no intro text."""
+Start directly with "1." â no intro text."""
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[
@@ -257,15 +257,15 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = get_user(user_id)
     if not user.get("groq_key"):
         await update.message.reply_text(
-            "⚠️ No Groq API key set.\n\nGet your free key at console.groq.com\nThen send: `/setkey YOUR_KEY`",
+            "â ï¸ No Groq API key set.\n\nGet your free key at console.groq.com\nThen send: `/setkey YOUR_KEY`",
             parse_mode="Markdown",
         )
         return
-    msg = await update.message.reply_text("⏳ Processing YouTube link...")
+    msg = await update.message.reply_text("â³ Processing YouTube link...")
     try:
         with tempfile.TemporaryDirectory() as tmp_dir:
             await context.bot.edit_message_text(
-                "🔍 Checking for subtitles...",
+                "ð Checking for subtitles...",
                 chat_id=update.effective_chat.id,
                 message_id=msg.message_id
             )
@@ -275,13 +275,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if result_type == "subtitle_text":
                 transcript = result_data
                 await context.bot.edit_message_text(
-                    "✅ Subtitles found — generating summary...",
+                    "â Subtitles found â generating summary...",
                     chat_id=update.effective_chat.id,
                     message_id=msg.message_id
                 )
             else:
                 await context.bot.edit_message_text(
-                    "🎵 Audio downloaded — transcribing...",
+                    "ðµ Audio downloaded â transcribing...",
                     chat_id=update.effective_chat.id,
                     message_id=msg.message_id
                 )
@@ -289,7 +289,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     result_data, tmp_dir, user, update, context, msg
                 )
             await context.bot.edit_message_text(
-                "✍️ Generating summary...",
+                "âï¸ Generating summary...",
                 chat_id=update.effective_chat.id,
                 message_id=msg.message_id
             )
@@ -300,7 +300,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error processing YouTube: {e}")
         await context.bot.edit_message_text(
-            f"❌ Error: {str(e)[:200]}",
+            f"â Error: {str(e)[:200]}",
             chat_id=update.effective_chat.id,
             message_id=msg.message_id
         )
@@ -310,11 +310,11 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = get_user(user_id)
     if not user.get("groq_key"):
         await update.message.reply_text(
-            "⚠️ No Groq API key set.\n\nGet your free key at console.groq.com\nThen send: `/setkey YOUR_KEY`",
+            "â ï¸ No Groq API key set.\n\nGet your free key at console.groq.com\nThen send: `/setkey YOUR_KEY`",
             parse_mode="Markdown",
         )
         return
-    msg = await update.message.reply_text("⏳ Downloading file...")
+    msg = await update.message.reply_text("â³ Downloading file...")
     try:
         if update.message.audio:
             tg_file = update.message.audio
@@ -333,7 +333,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             file_path = os.path.join(tmp_dir, file_name)
             await file.download_to_drive(file_path)
             await context.bot.edit_message_text(
-                "🎵 File received — transcribing...",
+                "ðµ File received â transcribing...",
                 chat_id=update.effective_chat.id,
                 message_id=msg.message_id
             )
@@ -341,7 +341,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 file_path, tmp_dir, user, update, context, msg
             )
             await context.bot.edit_message_text(
-                "✍️ Generating summary...",
+                "âï¸ Generating summary...",
                 chat_id=update.effective_chat.id,
                 message_id=msg.message_id
             )
@@ -352,7 +352,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error processing file: {e}")
         await context.bot.edit_message_text(
-            f"❌ Error: {str(e)[:200]}",
+            f"â Error: {str(e)[:200]}",
             chat_id=update.effective_chat.id,
             message_id=msg.message_id
         )
@@ -369,7 +369,7 @@ async def transcribe_audio_file(file_path, tmp_dir, user, update, context, msg):
     for i, chunk_path in enumerate(chunks):
         if total > 1:
             await context.bot.edit_message_text(
-                f"🎙 Transcribing chunk {i+1}/{total}...",
+                f"ð Transcribing chunk {i+1}/{total}...",
                 chat_id=update.effective_chat.id,
                 message_id=msg.message_id
             )
@@ -390,26 +390,34 @@ async def send_results(update, context, msg, transcript, summary):
     await update.message.reply_text(summary_text, parse_mode="Markdown")
     transcript_preview = f"📝 *TRANSCRIPT*\n\n{transcript}"
     if len(transcript_preview) > 4000:
-        transcript_preview = transcript_preview[:4000] + "\n\n_[Truncated — see .txt file for full transcript]_"
+        transcript_preview = transcript_preview[:4000] + "\n\n_[Truncated — see transcript.txt for full]_"
     await update.message.reply_text(transcript_preview, parse_mode="Markdown")
+
+    # Send summary as separate file
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
-        f.write("ONESHOT TRANSCRIBER\n")
+        f.write("ONESHOT TRANSCRIBER — SUMMARY\n")
         f.write("=" * 50 + "\n\n")
-        f.write("SUMMARY\n")
-        f.write("=" * 50 + "\n\n")
-        f.write(summary + "\n\n")
-        f.write("=" * 50 + "\n\n")
-        f.write("FULL TRANSCRIPT\n")
+        f.write(summary)
+        summary_path = f.name
+    await update.message.reply_document(
+        document=open(summary_path, "rb"),
+        filename="summary.txt",
+        caption="📋 Summary"
+    )
+    os.unlink(summary_path)
+
+    # Send transcript as separate file
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
+        f.write("ONESHOT TRANSCRIBER — FULL TRANSCRIPT\n")
         f.write("=" * 50 + "\n\n")
         f.write(transcript)
-        tmp_path = f.name
+        transcript_path = f.name
     await update.message.reply_document(
-        document=open(tmp_path, "rb"),
+        document=open(transcript_path, "rb"),
         filename="transcript.txt",
-        caption="📄 Full transcript + summary"
+        caption="📄 Full transcript"
     )
-    os.unlink(tmp_path)
-
+    os.unlink(transcript_path)
 def main():
     load_user_data()
     token = os.environ.get("BOT_TOKEN")

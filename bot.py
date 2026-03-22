@@ -97,7 +97,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def is_youtube_url(text: str) -> bool:
     return any(x in text for x in ["youtube.com/watch", "youtu.be/", "youtube.com/shorts"])
 
-async def process_youtube(url: str, tmp_dir: str):
+def process_youtube(url: str, tmp_dir: str):
     sub_opts = {
         "writeautomaticsub": True,
         "writesubtitles": True,

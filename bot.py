@@ -44,19 +44,19 @@ def get_user(user_id: int) -> dict:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "ð *OneShot Transcriber*\n\n"
+        "\U0001f44b *OneShot Transcriber*\n\n"
         "Send me:\n"
-        "â¢ An audio file (MP3, M4A, WAV, OGG)\n"
-        "â¢ A video file (MP4, MKV, MOV)\n"
-        "â¢ A YouTube link\n\n"
+        "\u2022 An audio file (MP3, M4A, WAV, OGG)\n"
+        "\u2022 A video file (MP4, MKV, MOV)\n"
+        "\u2022 A YouTube link\n\n"
         "I'll transcribe it and give you a full transcript + structured summary.\n\n"
         "*Setup:*\n"
         "1. Get a free Groq API key at console.groq.com\n"
         "2. Send: `/setkey YOUR_GROQ_KEY`\n\n"
         "*Commands:*\n"
-        "`/setkey KEY` â set your Groq API key\n"
-        "`/language` â toggle English / Taglish mode\n"
-        "`/status` â check your current settings",
+        "`/setkey KEY` \u2014 set your Groq API key\n"
+        "`/language` \u2014 toggle English / Taglish mode\n"
+        "`/status` \u2014 check your current settings",
         parse_mode="Markdown",
     )
 
@@ -72,21 +72,21 @@ async def set_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = get_user(user_id)
     user["groq_key"] = key
     save_user_data()
-    await update.message.reply_text("â Groq API key saved.")
+    await update.message.reply_text("\u2705 Groq API key saved.")
 
 async def toggle_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = get_user(user_id)
     user["taglish"] = not user.get("taglish", False)
     save_user_data()
-    mode = "ðµð­ Filipino/Taglish" if user["taglish"] else "ðºð¸ English"
+    mode = "\U0001f1f5\U0001f1ed Filipino/Taglish" if user["taglish"] else "\U0001f1fa\U0001f1f8 English"
     await update.message.reply_text(f"Language mode set to: {mode}")
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = get_user(user_id)
-    has_key = "â Set" if user.get("groq_key") else "â Not set"
-    lang = "ðµð­ Filipino/Taglish" if user.get("taglish") else "ðºð¸ English"
+    has_key = "\u2705 Set" if user.get("groq_key") else "\u274c Not set"
+    lang = "\U0001f1f5\U0001f1ed Filipino/Taglish" if user.get("taglish") else "\U0001f1fa\U0001f1f8 English"
     await update.message.reply_text(
         f"*Your settings:*\n"
         f"Groq API Key: {has_key}\n"
@@ -222,7 +222,7 @@ def generate_summary(transcript: str, groq_key: str, taglish: bool) -> str:
     lang_note = "\nThe transcript may contain Filipino, Tagalog, English, or Taglish. Write summary in English." if taglish else ""
     system_prompt = f"""You are a precise transcript summarizer. Produce a structured numbered summary.{lang_note}
 
-FORMAT â follow exactly:
+FORMAT \u2014 follow exactly:
 1. Section Title
 1.1 Key point.
 1.2 Another point.
@@ -230,7 +230,7 @@ FORMAT â follow exactly:
 2. Next Section
 2.1 Key point.
 
-Start directly with "1." â no intro text."""
+Start directly with "1." \u2014 no intro text."""
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[
@@ -257,7 +257,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = get_user(user_id)
     if not user.get("groq_key"):
         await update.message.reply_text(
-            "â ï¸ No Groq API key set.\n\nGet your free key at console.groq.com\nThen send: `/setkey YOUR_KEY`",
+            "\u26a0\ufe0f No Groq API key set.\n\nGet your free key at console.groq.com\nThen send: `/setkey YOUR_KEY`",
             parse_mode="Markdown",
         )
         return
@@ -275,13 +275,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if result_type == "subtitle_text":
                 transcript = result_data
                 await context.bot.edit_message_text(
-                    "â Subtitles found â generating summary...",
+                    "\u2705 Subtitles found \u2014 generating summary...",
                     chat_id=update.effective_chat.id,
                     message_id=msg.message_id
                 )
             else:
                 await context.bot.edit_message_text(
-                    "ðµ Audio downloaded â transcribing...",
+                    "ðµ Audio downloaded \u2014 transcribing...",
                     chat_id=update.effective_chat.id,
                     message_id=msg.message_id
                 )
@@ -289,7 +289,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     result_data, tmp_dir, user, update, context, msg
                 )
             await context.bot.edit_message_text(
-                "âï¸ Generating summary...",
+                "â\ufe0f Generating summary...",
                 chat_id=update.effective_chat.id,
                 message_id=msg.message_id
             )
@@ -300,7 +300,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error processing YouTube: {e}")
         await context.bot.edit_message_text(
-            f"â Error: {str(e)[:200]}",
+            f"\u274c Error: {str(e)[:200]}",
             chat_id=update.effective_chat.id,
             message_id=msg.message_id
         )
@@ -310,7 +310,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = get_user(user_id)
     if not user.get("groq_key"):
         await update.message.reply_text(
-            "â ï¸ No Groq API key set.\n\nGet your free key at console.groq.com\nThen send: `/setkey YOUR_KEY`",
+            "\u26a0\ufe0f No Groq API key set.\n\nGet your free key at console.groq.com\nThen send: `/setkey YOUR_KEY`",
             parse_mode="Markdown",
         )
         return
@@ -333,7 +333,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             file_path = os.path.join(tmp_dir, file_name)
             await file.download_to_drive(file_path)
             await context.bot.edit_message_text(
-                "ðµ File received â transcribing...",
+                "ðµ File received \u2014 transcribing...",
                 chat_id=update.effective_chat.id,
                 message_id=msg.message_id
             )
@@ -341,7 +341,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 file_path, tmp_dir, user, update, context, msg
             )
             await context.bot.edit_message_text(
-                "âï¸ Generating summary...",
+                "â\ufe0f Generating summary...",
                 chat_id=update.effective_chat.id,
                 message_id=msg.message_id
             )
@@ -352,7 +352,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error processing file: {e}")
         await context.bot.edit_message_text(
-            f"â Error: {str(e)[:200]}",
+            f"\u274c Error: {str(e)[:200]}",
             chat_id=update.effective_chat.id,
             message_id=msg.message_id
         )
@@ -390,12 +390,12 @@ async def send_results(update, context, msg, transcript, summary):
     await update.message.reply_text(summary_text, parse_mode="Markdown")
     transcript_preview = f"📝 *TRANSCRIPT*\n\n{transcript}"
     if len(transcript_preview) > 4000:
-        transcript_preview = transcript_preview[:4000] + "\n\n_[Truncated — see transcript.txt for full]_"
+        transcript_preview = transcript_preview[:4000] + "\n\n_[Truncated \u2014 see transcript.txt for full]_"
     await update.message.reply_text(transcript_preview, parse_mode="Markdown")
 
     # Send summary as separate file
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
-        f.write("ONESHOT TRANSCRIBER — SUMMARY\n")
+        f.write("ONESHOT TRANSCRIBER \u2014 SUMMARY\n")
         f.write("=" * 50 + "\n\n")
         f.write(summary)
         summary_path = f.name
@@ -408,7 +408,7 @@ async def send_results(update, context, msg, transcript, summary):
 
     # Send transcript as separate file
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
-        f.write("ONESHOT TRANSCRIBER — FULL TRANSCRIPT\n")
+        f.write("ONESHOT TRANSCRIBER \u2014 FULL TRANSCRIPT\n")
         f.write("=" * 50 + "\n\n")
         f.write(transcript)
         transcript_path = f.name

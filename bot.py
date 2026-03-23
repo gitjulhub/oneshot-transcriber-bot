@@ -3,6 +3,7 @@ import asyncio
 import logging
 import tempfile
 import json
+import glob
 from pathlib import Path
 
 from telegram import Update, Document
@@ -48,7 +49,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Send me:\n"
         "\u2022 An audio file (MP3, M4A, WAV, OGG)\n"
         "\u2022 A video file (MP4, MKV, MOV)\n"
-        "\u2022 A YouTube link\n\n"
+        "\u2022 A YouTube link\n"
+        "\u2022 A Google Drive link (for large files)\n\n"
         "I'll transcribe it and give you a full transcript + structured summary.\n\n"
         "*Setup:*\n"
         "1. Get a free Groq API key at console.groq.com\n"
@@ -56,7 +58,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "*Commands:*\n"
         "`/setkey KEY` \u2014 set your Groq API key\n"
         "`/language` \u2014 toggle English / Taglish mode\n"
-        "`/status` \u2014 check your current settings",
+        "`/status` \u2014 check your current settings\n\n"
+        "*File too large?*\n"
+        "Telegram limits uploads to 20MB. Upload to Google Drive, set sharing to "
+        "'Anyone with the link', and paste the link here.",
         parse_mode="Markdown",
     )
 
@@ -94,12 +99,35 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
     )
 
-def is_youtube_url(text: str) -> bool:
-    return any(x in text for x in ["youtube.com/watch", "youtu.be/", "youtube.com/shorts"])
-
-
 def is_url(text: str) -> bool:
     return text.startswith("http://") or text.startswith("https://")
+
+def is_google_drive_url(text: str) -> bool:
+    return "drive.google.com" in text or "docs.google.com" in text
+
+def extract_gdrive_file_id(url: str) -> str:
+    import re
+    match = re.search(r"/d/([a-zA-Z0-9_-]+)", url)
+    if match:
+        return match.group(1)
+    match = re.search(r"id=([a-zA-Z0-9_-]+)", url)
+    if match:
+        return match.group(1)
+    return None
+
+def download_gdrive_file(url: str, tmp_dir: str) -> str:
+    import gdown
+    file_id = extract_gdrive_file_id(url)
+    if not file_id:
+        raise Exception("Could not extract Google Drive file ID from URL")
+    output_path = os.path.join(tmp_dir, "gdrive_audio")
+    gdown.download(id=file_id, output=output_path, quiet=True, fuzzy=True)
+    files = glob.glob(output_path + "*")
+    if not files:
+        raise Exception(
+            "Google Drive download failed \u2014 make sure the file is shared as 'Anyone with the link'"
+        )
+    return files[0]
 
 def process_youtube(url: str, tmp_dir: str):
     sub_opts = {
@@ -139,7 +167,7 @@ def process_youtube(url: str, tmp_dir: str):
     for f in Path(tmp_dir).glob("audio_*"):
         return ("audio_file", str(f))
 
-    raise Exception("Could not download YouTube audio")
+    raise Exception("Could not download audio from URL")
 
 def parse_vtt(raw: str) -> str:
     import re
@@ -149,9 +177,12 @@ def parse_vtt(raw: str) -> str:
         line = line.strip()
         if not line or line.startswith("WEBVTT") or line.startswith("NOTE"):
             continue
+        if line.startswith("Kind:") or line.startswith("Language:"):
+            continue
         if re.match(r"\d{2}:\d{2}:\d{2}", line):
             continue
         line = re.sub(r"<[^>]+>", "", line)
+        line = re.sub(r"[\u266a\u266b]+", "", line).strip()
         if line:
             result.append(line)
     deduped = []
@@ -226,7 +257,7 @@ def generate_summary(transcript: str, groq_key: str, taglish: bool) -> str:
     lang_note = "\nThe transcript may contain Filipino, Tagalog, English, or Taglish. Write summary in English." if taglish else ""
     system_prompt = f"""You are a precise transcript summarizer. Produce a structured numbered summary.{lang_note}
 
-FORMAT \u2014 follow exactly:
+FORMAT -- follow exactly:
 1. Section Title
 1.1 Key point.
 1.2 Another point.
@@ -234,7 +265,7 @@ FORMAT \u2014 follow exactly:
 2. Next Section
 2.1 Key point.
 
-Start directly with "1." \u2014 no intro text."""
+Start directly with "1." -- no intro text."""
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[
@@ -255,7 +286,9 @@ def convert_to_mp3(input_path: str, tmp_dir: str) -> str:
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     if not is_url(text):
-        await update.message.reply_text("Send me a link (YouTube, Google Drive, or any direct audio/video URL), an audio file, or a video file.")
+        await update.message.reply_text(
+            "Send me a link (YouTube, Google Drive, or any direct audio/video URL), an audio file, or a video file."
+        )
         return
     user_id = update.effective_user.id
     user = get_user(user_id)
@@ -265,35 +298,53 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
         )
         return
-    msg = await update.message.reply_text("â³ Processing link...")
+    msg = await update.message.reply_text("\u23f3 Processing link...")
     try:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            await context.bot.edit_message_text(
-                "ð Checking for subtitles...",
-                chat_id=update.effective_chat.id,
-                message_id=msg.message_id
-            )
-            result_type, result_data = await asyncio.get_event_loop().run_in_executor(
-                None, lambda: process_youtube(text, tmp_dir)
-            )
-            if result_type == "subtitle_text":
-                transcript = result_data
+            if is_google_drive_url(text):
                 await context.bot.edit_message_text(
-                    "\u2705 Subtitles found \u2014 generating summary...",
+                    "\u2B07\uFE0F Downloading from Google Drive...",
                     chat_id=update.effective_chat.id,
                     message_id=msg.message_id
                 )
-            else:
+                audio_path = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: download_gdrive_file(text, tmp_dir)
+                )
                 await context.bot.edit_message_text(
-                    "ðµ Audio downloaded \u2014 transcribing...",
+                    "\U0001f3b5 File downloaded \u2014 transcribing...",
                     chat_id=update.effective_chat.id,
                     message_id=msg.message_id
                 )
                 transcript = await transcribe_audio_file(
-                    result_data, tmp_dir, user, update, context, msg
+                    audio_path, tmp_dir, user, update, context, msg
                 )
+            else:
+                await context.bot.edit_message_text(
+                    "\U0001f50d Checking for subtitles...",
+                    chat_id=update.effective_chat.id,
+                    message_id=msg.message_id
+                )
+                result_type, result_data = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: process_youtube(text, tmp_dir)
+                )
+                if result_type == "subtitle_text":
+                    transcript = result_data
+                    await context.bot.edit_message_text(
+                        "\u2705 Subtitles found \u2014 generating summary...",
+                        chat_id=update.effective_chat.id,
+                        message_id=msg.message_id
+                    )
+                else:
+                    await context.bot.edit_message_text(
+                        "\U0001f3b5 Audio downloaded \u2014 transcribing...",
+                        chat_id=update.effective_chat.id,
+                        message_id=msg.message_id
+                    )
+                    transcript = await transcribe_audio_file(
+                        result_data, tmp_dir, user, update, context, msg
+                    )
             await context.bot.edit_message_text(
-                "â\ufe0f Generating summary...",
+                "\u270d\ufe0f Generating summary...",
                 chat_id=update.effective_chat.id,
                 message_id=msg.message_id
             )
@@ -302,7 +353,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await send_results(update, context, msg, transcript, summary)
     except Exception as e:
-        logger.error(f"Error processing YouTube: {e}")
+        logger.error(f"Error processing link: {e}")
         await context.bot.edit_message_text(
             f"\u274c Error: {str(e)[:200]}",
             chat_id=update.effective_chat.id,
@@ -318,7 +369,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
         )
         return
-    msg = await update.message.reply_text("â³ Downloading file...")
+    msg = await update.message.reply_text("\u23f3 Downloading file...")
     try:
         if update.message.audio:
             tg_file = update.message.audio
@@ -337,7 +388,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             file_path = os.path.join(tmp_dir, file_name)
             await file.download_to_drive(file_path)
             await context.bot.edit_message_text(
-                "ðµ File received \u2014 transcribing...",
+                "\U0001f3b5 File received \u2014 transcribing...",
                 chat_id=update.effective_chat.id,
                 message_id=msg.message_id
             )
@@ -345,7 +396,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 file_path, tmp_dir, user, update, context, msg
             )
             await context.bot.edit_message_text(
-                "â\ufe0f Generating summary...",
+                "\u270d\ufe0f Generating summary...",
                 chat_id=update.effective_chat.id,
                 message_id=msg.message_id
             )
@@ -356,9 +407,13 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error processing file: {e}")
         err = str(e)
-        if "too big" in err.lower() or "file is too big" in err.lower() or "large" in err.lower() or "413" in err or "20" in err:
+        if "too big" in err.lower() or "large" in err.lower() or "413" in err:
             await context.bot.edit_message_text(
-                "\u26a0\ufe0f File too large \u2014 Telegram limits bot uploads to 20MB.\n\nInstead:\n1. Upload your file to Google Drive\n2. Set sharing to \u201cAnyone with the link\u201d\n3. Paste the link here",
+                "\u26a0\ufe0f File too large \u2014 Telegram limits bot uploads to 20MB.\n\n"
+                "Instead:\n"
+                "1. Upload your file to Google Drive\n"
+                "2. Set sharing to 'Anyone with the link'\n"
+                "3. Paste the link here",
                 chat_id=update.effective_chat.id,
                 message_id=msg.message_id
             )
@@ -381,7 +436,7 @@ async def transcribe_audio_file(file_path, tmp_dir, user, update, context, msg):
     for i, chunk_path in enumerate(chunks):
         if total > 1:
             await context.bot.edit_message_text(
-                f"ð Transcribing chunk {i+1}/{total}...",
+                f"\U0001f399 Transcribing chunk {i+1}/{total}...",
                 chat_id=update.effective_chat.id,
                 message_id=msg.message_id
             )
@@ -396,40 +451,40 @@ async def send_results(update, context, msg, transcript, summary):
         chat_id=update.effective_chat.id,
         message_id=msg.message_id
     )
-    summary_text = f"📋 *SUMMARY*\n\n{summary}"
+    summary_text = f"\U0001f4cb SUMMARY\n\n{summary}"
     if len(summary_text) > 4000:
         summary_text = summary_text[:4000] + "..."
-    await update.message.reply_text(summary_text, parse_mode="Markdown")
-    transcript_preview = f"📝 *TRANSCRIPT*\n\n{transcript}"
-    if len(transcript_preview) > 4000:
-        transcript_preview = transcript_preview[:4000] + "\n\n_[Truncated \u2014 see transcript.txt for full]_"
-    await update.message.reply_text(transcript_preview, parse_mode="Markdown")
+    await update.message.reply_text(summary_text)
 
-    # Send summary as separate file
+    transcript_preview = f"\U0001f4dd TRANSCRIPT\n\n{transcript}"
+    if len(transcript_preview) > 4000:
+        transcript_preview = transcript_preview[:4000] + "\n\n[Truncated -- see transcript.txt for full]"
+    await update.message.reply_text(transcript_preview)
+
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
-        f.write("ONESHOT TRANSCRIBER \u2014 SUMMARY\n")
+        f.write("ONESHOT TRANSCRIBER -- SUMMARY\n")
         f.write("=" * 50 + "\n\n")
         f.write(summary)
         summary_path = f.name
     await update.message.reply_document(
         document=open(summary_path, "rb"),
         filename="summary.txt",
-        caption="📋 Summary"
+        caption="\U0001f4cb Summary"
     )
     os.unlink(summary_path)
 
-    # Send transcript as separate file
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
-        f.write("ONESHOT TRANSCRIBER \u2014 FULL TRANSCRIPT\n")
+        f.write("ONESHOT TRANSCRIBER -- FULL TRANSCRIPT\n")
         f.write("=" * 50 + "\n\n")
         f.write(transcript)
         transcript_path = f.name
     await update.message.reply_document(
         document=open(transcript_path, "rb"),
         filename="transcript.txt",
-        caption="📄 Full transcript"
+        caption="\U0001f4c4 Full transcript"
     )
     os.unlink(transcript_path)
+
 def main():
     load_user_data()
     token = os.environ.get("BOT_TOKEN")

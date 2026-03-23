@@ -101,7 +101,7 @@ def is_url(text: str) -> bool:
     return text.startswith("http://") or text.startswith("https://")
 
 def is_google_drive_url(text: str) -> bool:
-    return "drive.google.com" in text or "docs.google.com" in text
+    return "drive.google.com" in text or "docs.google.com" in text or "drive.usercontent.google.com" in text
 
 def extract_gdrive_file_id(url: str) -> str:
     import re
@@ -134,6 +134,7 @@ def process_youtube(url: str, tmp_dir: str):
         "skip_download": True,
         "outtmpl": os.path.join(tmp_dir, "subs_%(id)s.%(ext)s"),
         "quiet": True,
+        "extractor_args": {"youtube": {"player_client": ["android"]}},
     }
     try:
         with yt_dlp.YoutubeDL(sub_opts) as ydl:
@@ -149,10 +150,11 @@ def process_youtube(url: str, tmp_dir: str):
     except Exception:
         pass
     audio_opts = {
-        "format": "worstaudio/bestaudio",
+        "format": "bestaudio/best",
         "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "32"}],
         "outtmpl": os.path.join(tmp_dir, "audio_%(id)s.%(ext)s"),
         "quiet": True,
+        "extractor_args": {"youtube": {"player_client": ["android"]}},
     }
     with yt_dlp.YoutubeDL(audio_opts) as ydl:
         ydl.download([url])

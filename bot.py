@@ -199,24 +199,39 @@ def parse_srt(raw: str) -> str:
         result.append(line)
     return " ".join(result)
 
+def get_audio_duration(file_path: str) -> float:
+    import subprocess
+    result = subprocess.run([
+        "ffprobe", "-v", "quiet", "-print_format", "json",
+        "-show_format", file_path
+    ], capture_output=True, text=True, check=True)
+    import json as _json
+    info = _json.loads(result.stdout)
+    return float(info["format"]["duration"])
+
 def chunk_audio(file_path: str, tmp_dir: str, chunk_ms: int = 540000) -> list:
-    audio = AudioSegment.from_file(file_path)
-    if len(audio) <= chunk_ms:
+    import subprocess
+    chunk_secs = chunk_ms / 1000
+    overlap_secs = 5
+    try:
+        duration = get_audio_duration(file_path)
+    except Exception:
+        return [file_path]
+    if duration <= chunk_secs:
         return [file_path]
     chunks = []
-    overlap_ms = 5000
-    start = 0
+    start = 0.0
     idx = 0
-    while start < len(audio):
-        end = min(start + chunk_ms, len(audio))
-        chunk = audio[start:end]
+    while start < duration and idx < 50:
         chunk_path = os.path.join(tmp_dir, f"chunk_{idx:03d}.mp3")
-        chunk.export(chunk_path, format="mp3", bitrate="32k", parameters=["-ar", "16000", "-ac", "1"])
+        subprocess.run([
+            "ffmpeg", "-y", "-ss", str(start), "-i", file_path,
+            "-t", str(chunk_secs), "-ar", "16000", "-ac", "1", "-b:a", "32k",
+            chunk_path
+        ], check=True, capture_output=True)
         chunks.append(chunk_path)
-        start += chunk_ms - overlap_ms
+        start += chunk_secs - overlap_secs
         idx += 1
-        if idx >= 50:
-            break
     return chunks
 
 def transcribe_file(file_path: str, groq_key: str, taglish: bool) -> str:
@@ -263,9 +278,13 @@ def generate_summary(transcript: str, groq_key: str, taglish: bool) -> str:
     return response.choices[0].message.content.strip()
 
 def convert_to_mp3(input_path: str, tmp_dir: str) -> str:
+    import subprocess
     output_path = os.path.join(tmp_dir, "converted.mp3")
-    audio = AudioSegment.from_file(input_path)
-    audio.export(output_path, format="mp3", bitrate="32k", parameters=["-ar", "16000", "-ac", "1"])
+    subprocess.run([
+        "ffmpeg", "-y", "-i", input_path,
+        "-ar", "16000", "-ac", "1", "-b:a", "32k",
+        output_path
+    ], check=True, capture_output=True)
     return output_path
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):

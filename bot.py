@@ -9,7 +9,7 @@ from pathlib import Path
 from telegram import Update
 from telegram.ext import (
     Application,
-    CommandHandler,
+    CommandHandler,h
     MessageHandler,
     ContextTypes,
     filters,
@@ -134,7 +134,7 @@ def process_youtube(url: str, tmp_dir: str):
         "skip_download": True,
         "outtmpl": os.path.join(tmp_dir, "subs_%(id)s.%(ext)s"),
         "quiet": True,
-        "extractor_args": {"youtube": {"player_client": ["android"]}},
+        "extractor_args": {"youtube": {"player_client": ["ios", "android", "mweb"]}},
     }
     try:
         with yt_dlp.YoutubeDL(sub_opts) as ydl:
@@ -154,7 +154,7 @@ def process_youtube(url: str, tmp_dir: str):
         "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "32"}],
         "outtmpl": os.path.join(tmp_dir, "audio_%(id)s.%(ext)s"),
         "quiet": True,
-        "extractor_args": {"youtube": {"player_client": ["android"]}},
+        "extractor_args": {"youtube": {"player_client": ["ios", "android", "mweb"]}},
     }
     with yt_dlp.YoutubeDL(audio_opts) as ydl:
         ydl.download([url])

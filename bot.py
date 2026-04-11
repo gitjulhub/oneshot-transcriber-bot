@@ -381,21 +381,21 @@ async def transcribe_audio_file(file_path, tmp_dir, user, update, context, msg):
 
 async def send_results(update, context, msg, transcript, summary):
     await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=msg.message_id)
-    summary_text = "\U0001f4cb SUMMARY\n\n" + summary
+    summary_text = summary
     if len(summary_text) > 4000:
         summary_text = summary_text[:4000] + "..."
     await update.message.reply_text(summary_text)
-    transcript_preview = "\U0001f4dd TRANSCRIPT\n\n" + transcript
+    transcript_preview = transcript
     if len(transcript_preview) > 4000:
         transcript_preview = transcript_preview[:4000] + "\n\n[Truncated - see transcript.txt for full]"
     await update.message.reply_text(transcript_preview)
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
-        f.write("ONESHOT TRANSCRIBER - SUMMARY\n" + "=" * 50 + "\n\n" + summary)
+        f.write(summary)
         summary_path = f.name
     await update.message.reply_document(document=open(summary_path, "rb"), filename="summary.txt", caption="\U0001f4cb Summary")
     os.unlink(summary_path)
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
-        f.write("ONESHOT TRANSCRIBER - FULL TRANSCRIPT\n" + "=" * 50 + "\n\n" + transcript)
+        f.write(transcript)
         transcript_path = f.name
     await update.message.reply_document(document=open(transcript_path, "rb"), filename="transcript.txt", caption="\U0001f4c4 Full transcript")
     os.unlink(transcript_path)
